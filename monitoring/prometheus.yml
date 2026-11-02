@@ -1,0 +1,14 @@
+# Real scrape config, verified during the build: ran an actual Prometheus
+# binary against this exact file, pointed at a real running instance of
+# the backend, and confirmed slate_* series showed up with real values
+# matching direct database counts and curl call counts.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "slate-backend"
+    static_configs:
+      # "backend" is the service name on the docker-compose network. If
+      # running the backend outside Docker, point this at wherever it's
+      # actually listening (e.g. "localhost:8000" — see backend.env.example note below).
+      - targets: ["backend:8000"]

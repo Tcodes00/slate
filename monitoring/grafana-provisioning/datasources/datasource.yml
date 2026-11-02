@@ -1,0 +1,11 @@
+# Fixed uid so the dashboard JSON (slate-overview.json) can reference it
+# directly, no template-variable substitution step needed at import time.
+apiVersion: 1
+datasources:
+  - name: Slate Prometheus
+    type: prometheus
+    uid: slate-prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
