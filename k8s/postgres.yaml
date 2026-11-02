@@ -1,0 +1,56 @@
+# A self-contained Postgres for a fully in-cluster deployment, matching
+# what docker-compose.yml runs locally. For a REAL production deployment,
+# a managed database (RDS, Cloud SQL, etc.) is the standard recommendation
+# instead — one less stateful thing for the cluster itself to own, with
+# real automated backups. This StatefulSet exists so the manifests here
+# are runnable standalone, not because self-hosting Postgres in-cluster
+# is the advice.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: slate
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - { name: POSTGRES_USER, value: "slate" }
+            - { name: POSTGRES_DB, value: "slate" }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: slate-secrets, key: POSTGRES_PASSWORD } }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "slate"] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests: { cpu: "100m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources: { requests: { storage: 5Gi } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: slate
+spec:
+  selector: { app: postgres }
+  ports:
+    - { port: 5432, targetPort: 5432 }
+  clusterIP: None

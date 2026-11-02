@@ -1,0 +1,36 @@
+# Assumes an nginx ingress controller and cert-manager are already
+# installed on the cluster (standard, but not this manifest's job to
+# install). /api and /metrics both route to the backend; everything else
+# to the frontend. WebSocket upgrade headers need the two nginx
+# annotations below — without them, a reverse proxy silently drops the
+# Upgrade handshake and /api/ws just never connects, one of the easier
+# real-time deployment mistakes to make.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: slate
+  namespace: slate
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: ["slate.example.com", "api.slate.example.com"]
+      secretName: slate-tls
+  rules:
+    - host: api.slate.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: backend, port: { number: 8000 } }
+    - host: slate.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: { name: frontend, port: { number: 3000 } }

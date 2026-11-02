@@ -1,0 +1,18 @@
+# Only genuinely non-secret values here. DATABASE_URL is deliberately
+# NOT here — it embeds the Postgres password, so the whole connection
+# string lives in secret.yaml instead of being split across both
+# (a $(VAR) reference to another key only expands within a Pod's own env
+# list, not inside a ConfigMap value, so this isn't just a style choice).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: slate-config
+  namespace: slate
+data:
+  REDIS_URL: "redis://redis:6379/0"
+  ALLOWED_ORIGINS: "https://slate.example.com"
+  ENVIRONMENT: "production"
+  APP_BASE_URL: "https://api.slate.example.com"
+  FRONTEND_URL: "https://slate.example.com"
+  SMTP_FROM: "no-reply@slate.example.com"
+  NEXT_PUBLIC_API_URL: "https://api.slate.example.com"
