@@ -1,0 +1,113 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: slate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-slatepass}
+      POSTGRES_DB: slate
+    volumes:
+      - slate-db-data:/var/lib/postgresql/data
+    # Not published to the host: `backend` reaches this over the internal
+    # compose network via the service name (db:5432), which is all it
+    # needs. Uncomment below only for connecting a local DB GUI client —
+    # and set a real POSTGRES_PASSWORD in .env before doing that anywhere
+    # the host is reachable from outside.
+    # ports:
+    #   - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U slate"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    # Same reasoning as db above — backend reaches this via redis:6379 on
+    # the internal network. Redis has no auth by default, so this one
+    # matters even more than Postgres's port if the host is public.
+    # ports:
+    #   - "6379:6379"
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://slate:${POSTGRES_PASSWORD:-slatepass}@db:5432/slate
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-change-before-production}
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GROK_API_KEY: ${GROK_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      WEBAUTHN_RP_ID: ${WEBAUTHN_RP_ID:-localhost}
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@slate.dev}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      # Sets the production_guard.py trip wire (see backend/production_guard.py) —
+      # leave unset (development) for local use; set to "production" only
+      # once SECRET_KEY/FIELD_ENCRYPTION_KEY/POSTGRES_PASSWORD are all real.
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      ALLOWED_ORIGINS: http://localhost:3000
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Reaches the backend from the BROWSER, so this must be a
+        # host-reachable URL, not the Docker-internal "backend" hostname.
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  # Optional — `docker compose --profile monitoring up` to include these
+  # two. Verified for real during the build (see README.md): actual
+  # Prometheus and Grafana binaries, run directly against a real backend
+  # instance, confirmed scraping and rendering live data end to end. This
+  # compose wiring reuses those exact same config files
+  # (monitoring/prometheus.yml, monitoring/grafana-provisioning/) — only
+  # the "run it inside Docker" part is untested, the same honest caveat
+  # as db/redis/backend/frontend above.
+  prometheus:
+    image: prom/prometheus:latest
+    profiles: ["monitoring"]
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - backend
+
+  grafana:
+    image: grafana/grafana:latest
+    profiles: ["monitoring"]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./monitoring/grafana-provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/slate-dashboards:ro
+      - slate-grafana-data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  slate-db-data:
+  slate-grafana-data:
