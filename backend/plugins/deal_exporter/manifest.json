@@ -1,0 +1,6 @@
+{
+  "key": "deal_exporter",
+  "name": "Deal Exporter",
+  "version": "1.0.0",
+  "description": "Adds a CSV export endpoint for the CRM pipeline — the reference plugin showing the loader mount a real, tenant-scoped, authenticated route with zero changes to main.py."
+}
